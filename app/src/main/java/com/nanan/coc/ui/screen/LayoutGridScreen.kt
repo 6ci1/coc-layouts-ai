@@ -443,7 +443,6 @@ fun SettingsDialog(
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit
 ) {
-    val context = LocalContext.current
     var cnDoc by remember { mutableStateOf(cnDocId) }
     var enDoc by remember { mutableStateOf(enDocId) }
 
@@ -472,52 +471,6 @@ fun SettingsDialog(
                     color = CocTextSecondary
                 )
 
-                HorizontalDivider()
-
-                // 关于
-                Text(
-                    "关于",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = CocTextSecondary
-                )
-                Text(
-                    "版本 ${context.getString(R.string.app_version)}",
-                    fontSize = 12.sp,
-                    color = CocTextSecondary
-                )
-                Text(
-                    "开发者：${context.getString(R.string.developer_name)}",
-                    fontSize = 12.sp,
-                    color = CocTextSecondary
-                )
-                Text(
-                    "联系作者：${context.getString(R.string.developer_contact)}",
-                    fontSize = 12.sp,
-                    color = CocTextSecondary
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val url = context.getString(R.string.github_url)
-                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                        }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "GitHub：",
-                        fontSize = 12.sp,
-                        color = CocTextSecondary
-                    )
-                    Text(
-                        context.getString(R.string.github_url),
-                        fontSize = 12.sp,
-                        color = CocAccent,
-                        textDecoration = TextDecoration.Underline
-                    )
-                }
             }
         },
         confirmButton = {
@@ -748,8 +701,45 @@ fun OpenLinkDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消", color = Color(0xFF9E9E9E))
+            val ctx = LocalContext.current
+            var showAbout by remember { mutableStateOf(false) }
+
+            if (showAbout) {
+                AlertDialog(
+                    onDismissRequest = { showAbout = false },
+                    title = { Text("关于") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("COC阵型工具 v${ctx.getString(R.string.app_version)}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("开发者：${ctx.getString(R.string.developer_name)}", fontSize = 13.sp, color = CocTextSecondary)
+                            Text("联系作者：${ctx.getString(R.string.developer_contact)}", fontSize = 13.sp, color = CocTextSecondary)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(ctx.getString(R.string.github_url))))
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("GitHub：", fontSize = 13.sp, color = CocTextSecondary)
+                                Text(ctx.getString(R.string.github_url), fontSize = 13.sp, color = CocAccent, textDecoration = TextDecoration.Underline)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showAbout = false }) { Text("确定", color = CocAccent) }
+                    }
+                )
+            }
+
+            Row {
+                TextButton(onClick = { showAbout = true }) {
+                    Text("关于", color = Color(0xFF9E9E9E))
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("取消", color = Color(0xFF9E9E9E))
+                }
             }
         }
     )
