@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -423,6 +424,42 @@ class MainActivity : ComponentActivity() {
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                     }
+                }
+
+                // 关于
+                var showAbout by remember { mutableStateOf(false) }
+
+                if (showAbout) {
+                    AlertDialog(
+                        onDismissRequest = { showAbout = false },
+                        title = { Text("关于") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("COC阵型工具 v${context.getString(R.string.app_version)}", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                Text("开发者：${context.getString(R.string.developer_name)}", fontSize = 13.sp, color = Color(0xFF909090))
+                                Text("联系作者：${context.getString(R.string.developer_contact)}", fontSize = 13.sp, color = Color(0xFF909090))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(context.getString(R.string.github_url))))
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("GitHub：", fontSize = 13.sp, color = Color(0xFF909090))
+                                    Text(context.getString(R.string.github_url), fontSize = 13.sp, color = Color(0xFF909090), textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showAbout = false }) { Text("确定", color = Color(0xFF909090)) }
+                        }
+                    )
+                }
+
+                TextButton(onClick = { showAbout = true }) {
+                    Text("关于", fontSize = 13.sp, color = Color(0xFFBDBDBD))
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
