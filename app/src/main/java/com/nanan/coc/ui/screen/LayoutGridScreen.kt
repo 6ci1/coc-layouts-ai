@@ -491,6 +491,11 @@ fun SettingsDialog(
                     fontSize = 12.sp,
                     color = CocTextSecondary
                 )
+                Text(
+                    "联系作者：${context.getString(R.string.developer_contact)}",
+                    fontSize = 12.sp,
+                    color = CocTextSecondary
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
