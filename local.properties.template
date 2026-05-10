@@ -1,0 +1,14 @@
+# SDK 路径
+sdk.dir=/opt/android-sdk
+
+# ===== llua.cn V2 验证协议密钥 =====
+# 从 llua.cn 控制台获取，填入以下值
+AUTH_API_TOKEN=
+AUTH_APP_KEY=
+AUTH_RK_F52=
+AUTH_RK_QOP=
+AUTH_RK_BUK=
+AUTH_RK_B43=
+AUTH_RK_RSP_INNER=
+AUTH_RK_RSP_OUTER=
+AUTH_RK_RSP_SIMPLE=

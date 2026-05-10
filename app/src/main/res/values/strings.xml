@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">COC阵型工具</string>
+    <string name="app_version">1.2.0</string>
+    <string name="github_url">https://github.com/gen_nan/coc-layouts</string>
+    <string name="developer_name">nanan</string>
+    <string name="developer_contact">gen_nan</string>
+</resources>

@@ -1,0 +1,19 @@
+# Built outputs
+*.apk
+*.aab
+*.iml
+.gradle/
+build/
+/app/build/
+
+# Local config
+local.properties
+
+# IDE
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
