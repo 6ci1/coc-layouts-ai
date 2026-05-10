@@ -17,3 +17,6 @@ local.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Signing key
+release-key.jks
