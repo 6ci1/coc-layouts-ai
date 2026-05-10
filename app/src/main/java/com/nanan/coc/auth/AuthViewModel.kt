@@ -29,7 +29,6 @@ class AuthViewModel @Inject constructor(
 
     sealed class UiEvent {
         data class Toast(val message: String) : UiEvent()
-        data class ShowDebug(val message: String) : UiEvent()
         data class ShowNotice(val message: String) : UiEvent()
     }
 
@@ -131,8 +130,7 @@ class AuthViewModel @Inject constructor(
                 _events.value = UiEvent.Toast("${result.message}$expireMsg")
                 _state.value = AuthState.Activated
             } else {
-                val debugMsg = result.message
-                _events.value = UiEvent.ShowDebug(debugMsg)
+                _events.value = UiEvent.Toast(result.message)
                 _state.value = AuthState.NeedLogin
             }
         }

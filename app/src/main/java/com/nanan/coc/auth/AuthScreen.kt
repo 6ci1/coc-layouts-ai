@@ -15,8 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.nanan.coc.R
@@ -28,8 +27,6 @@ fun AuthScreen(
 ) {
     val context = LocalContext.current
     var kami by remember { mutableStateOf("") }
-    var showDebug by remember { mutableStateOf(false) }
-    var debugText by remember { mutableStateOf("") }
     var showNotice by remember { mutableStateOf(false) }
     var noticeText by remember { mutableStateOf("") }
 
@@ -40,10 +37,7 @@ fun AuthScreen(
                 is AuthViewModel.UiEvent.Toast -> {
                     Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
                 }
-                is AuthViewModel.UiEvent.ShowDebug -> {
-                    debugText = event.message
-                    showDebug = true
-                }
+
                 is AuthViewModel.UiEvent.ShowNotice -> {
                     noticeText = event.message
                     showNotice = true
@@ -70,29 +64,7 @@ fun AuthScreen(
         )
     }
 
-    if (showDebug) {
-        val clipboardManager = LocalClipboardManager.current
-        AlertDialog(
-            onDismissRequest = { showDebug = false },
-            title = { Text("调试信息") },
-            text = {
-                Text(
-                    text = debugText,
-                    fontSize = 10.sp,
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                )
-            },
-            confirmButton = {
-                Row {
-                    TextButton(onClick = {
-                        clipboardManager.setText(AnnotatedString(debugText))
-                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-                    }) { Text("复制") }
-                    TextButton(onClick = { showDebug = false }) { Text("关闭") }
-                }
-            }
-        )
-    }
+
 
     Scaffold(
         containerColor = Color.White,
@@ -218,13 +190,6 @@ fun AuthScreen(
                     color = if (state != AuthViewModel.AuthState.LoggingIn)
                         Color(0xFFA0A0A0) else Color(0xFFD0D0D0)
                 )
-            }
-
-            if (state == AuthViewModel.AuthState.NeedLogin && debugText.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { showDebug = true }) {
-                    Text("查看调试日志", fontSize = 12.sp, color = Color(0xFFB0B0B0))
-                }
             }
 
             // 底部留白
