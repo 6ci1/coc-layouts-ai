@@ -1,14 +1,15 @@
 package com.nanan.coc.ui.screen
 
 import android.content.Intent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -26,20 +27,19 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +50,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.nanan.coc.R
 import com.nanan.coc.data.model.LayoutItem
+import com.nanan.coc.ui.components.LayoutGridShimmer
 import com.nanan.coc.ui.viewmodel.LayoutUiState
 import com.nanan.coc.ui.viewmodel.SortMode
 import com.google.accompanist.swiperefresh.SwipeRefresh
@@ -65,6 +66,42 @@ private val CocTextPrimary = Color(0xFF404040)
 private val CocTextSecondary = Color(0xFF909090)
 private val CocTextHint = Color(0xFFE9E9E9)
 private val CocFavorite = Color(0xFFEF5350)
+
+/**
+ * 带按压缩放效果的按钮
+ */
+@Composable
+private fun ScaleButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    color: Color,
+    content: @Composable RowScope.() -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "btnScale"
+    )
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier.scale(scale),
+        shape = RoundedCornerShape(10.dp),
+        color = color,
+        enabled = enabled,
+        interactionSource = interactionSource
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+            content = content
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,7 +181,6 @@ fun LayoutGridScreen(
             onDismiss = { showLinkDialog = false },
             onOpen = { link, server ->
                 showLinkDialog = false
-                // Extract TH level from link: id=TH18%3AHV...
                 val thLevel = Regex("TH(\\d+)").find(link.trim())?.groupValues?.get(1)?.toIntOrNull() ?: 0
                 onAddLinkHistory(link, server, thLevel)
                 onOpenCustomLink(link, server)
@@ -188,32 +224,66 @@ fun LayoutGridScreen(
                         .navigationBarsPadding(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // 云更新按钮 - 带旋转动画
+                    val refreshInteraction = remember { MutableInteractionSource() }
+                    val isRefreshPressed by refreshInteraction.collectIsPressedAsState()
+                    val refreshScale by animateFloatAsState(
+                        targetValue = if (isRefreshPressed) 0.93f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "refreshScale"
+                    )
+
                     Surface(
                         onClick = onRefresh,
-                        modifier = Modifier.weight(1f).height(42.dp),
+                        modifier = Modifier.weight(1f).height(42.dp).scale(refreshScale),
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFE0E0E0)
+                        color = Color(0xFFE0E0E0),
+                        interactionSource = refreshInteraction
                     ) {
                         Row(
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // 刷新时图标旋转
+                            val rotation by animateFloatAsState(
+                                targetValue = if (uiState.isRefreshing) 360f else 0f,
+                                animationSpec = if (uiState.isRefreshing) {
+                                    infiniteRepeatable(
+                                        animation = tween(1000, easing = LinearEasing),
+                                        repeatMode = RepeatMode.Restart
+                                    )
+                                } else { tween(300) },
+                                label = "refreshRotation"
+                            )
                             Icon(
                                 Icons.Default.Refresh,
                                 contentDescription = "云更新",
                                 tint = Color(0xFF616161),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .graphicsLayer { rotationZ = rotation }
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("云更新", fontSize = 13.sp, color = Color(0xFF616161), fontWeight = FontWeight.Medium)
                         }
                     }
+
+                    // 自定义链接按钮
+                    val linkInteraction = remember { MutableInteractionSource() }
+                    val isLinkPressed by linkInteraction.collectIsPressedAsState()
+                    val linkScale by animateFloatAsState(
+                        targetValue = if (isLinkPressed) 0.93f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "linkScale"
+                    )
+
                     Surface(
                         onClick = { showLinkDialog = true },
-                        modifier = Modifier.weight(1f).height(42.dp),
+                        modifier = Modifier.weight(1f).height(42.dp).scale(linkScale),
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFFE0E0E0)
+                        color = Color(0xFFE0E0E0),
+                        interactionSource = linkInteraction
                     ) {
                         Row(
                             modifier = Modifier.fillMaxSize(),
@@ -237,149 +307,200 @@ fun LayoutGridScreen(
         contentWindowInsets = WindowInsets(0.dp)
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            when {
-                uiState.isLoading && uiState.layouts.isEmpty() -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = CocAccent
-                    )
-                }
-                uiState.error != null && uiState.layouts.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(uiState.error, color = CocTextPrimary)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = onRefresh,
-                            colors = ButtonDefaults.buttonColors(containerColor = CocAccent)
-                        ) { Text("重试") }
+            // 使用 crossfade 在加载/错误/内容之间平滑切换
+            Crossfade(
+                targetState = when {
+                    uiState.isLoading && uiState.layouts.isEmpty() -> "loading"
+                    uiState.error != null && uiState.layouts.isEmpty() -> "error"
+                    else -> "content"
+                },
+                animationSpec = tween(400),
+                label = "contentCrossfade"
+            ) { state ->
+                when (state) {
+                    "loading" -> {
+                        // 骨架屏 shimmer 加载
+                        LayoutGridShimmer()
                     }
-                }
-                else -> {
-                    SwipeRefresh(
-                        state = rememberSwipeRefreshState(uiState.isRefreshing),
-                        onRefresh = onRefresh
-                    ) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            contentPadding = PaddingValues(10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                    "error" -> {
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // 公告 + 排序 + 收藏
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    uiState.notice?.let { msg ->
-                                        Text(
-                                            text = msg,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = CocAccentDark,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    } ?: Spacer(modifier = Modifier.weight(1f))
-
-                                    // 收藏筛选
-                                    IconButton(onClick = onToggleFavoritesOnly, modifier = Modifier.size(32.dp)) {
-                                        Icon(
-                                            if (uiState.showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                            contentDescription = "收藏",
-                                            tint = if (uiState.showFavoritesOnly) CocFavorite else CocTextHint,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-
-                                    // 排序
-                                    Box {
-                                        IconButton(onClick = { showSortMenu = true }, modifier = Modifier.size(32.dp)) {
-                                            Icon(Icons.Default.Sort, contentDescription = "排序", tint = CocTextSecondary, modifier = Modifier.size(18.dp))
-                                        }
-                                        DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                                            SortMode.entries.forEach { mode ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Text(
-                                                            mode.label,
-                                                            fontSize = 13.sp,
-                                                            color = if (mode == uiState.sortMode) CocAccent else CocTextPrimary
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        onSortModeChange(mode)
-                                                        showSortMenu = false
-                                                    }
+                            Text(uiState.error ?: "", color = CocTextPrimary)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = onRefresh,
+                                colors = ButtonDefaults.buttonColors(containerColor = CocAccent)
+                            ) { Text("重试") }
+                        }
+                    }
+                    "content" -> {
+                        SwipeRefresh(
+                            state = rememberSwipeRefreshState(uiState.isRefreshing),
+                            onRefresh = onRefresh
+                        ) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                contentPadding = PaddingValues(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // 公告 + 排序 + 收藏
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    AnimatedVisibility(
+                                        visible = true,
+                                        enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { -20 }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            uiState.notice?.let { msg ->
+                                                Text(
+                                                    text = msg,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = CocAccentDark,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f)
                                                 )
+                                            } ?: Spacer(modifier = Modifier.weight(1f))
+
+                                            // 收藏筛选 - 带心跳动画
+                                            val favScale by animateFloatAsState(
+                                                targetValue = if (uiState.showFavoritesOnly) 1.15f else 1f,
+                                                animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+                                                label = "favScale"
+                                            )
+                                            IconButton(onClick = onToggleFavoritesOnly, modifier = Modifier.size(32.dp)) {
+                                                Icon(
+                                                    if (uiState.showFavoritesOnly) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                                    contentDescription = "收藏",
+                                                    tint = if (uiState.showFavoritesOnly) CocFavorite else CocTextHint,
+                                                    modifier = Modifier
+                                                        .size(18.dp)
+                                                        .scale(favScale)
+                                                )
+                                            }
+
+                                            // 排序
+                                            Box {
+                                                IconButton(onClick = { showSortMenu = true }, modifier = Modifier.size(32.dp)) {
+                                                    Icon(Icons.Default.Sort, contentDescription = "排序", tint = CocTextSecondary, modifier = Modifier.size(18.dp))
+                                                }
+                                                DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
+                                                    SortMode.entries.forEach { mode ->
+                                                        DropdownMenuItem(
+                                                            text = {
+                                                                Text(
+                                                                    mode.label,
+                                                                    fontSize = 13.sp,
+                                                                    color = if (mode == uiState.sortMode) CocAccent else CocTextPrimary
+                                                                )
+                                                            },
+                                                            onClick = {
+                                                                onSortModeChange(mode)
+                                                                showSortMenu = false
+                                                            }
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            // 服务器分类
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(CocCard)
-                                        .horizontalScroll(rememberScrollState())
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    CocChip("全部", uiState.selectedServer == null) { onSelectServer(null) }
-                                    if (uiState.cnThLevels.isNotEmpty()) {
-                                        CocChip("国服", uiState.selectedServer == "cn") { onSelectServer("cn") }
-                                    }
-                                    if (uiState.enThLevels.isNotEmpty()) {
-                                        CocChip("国际服", uiState.selectedServer == "en") { onSelectServer("en") }
-                                    }
-                                }
-                            }
-
-                            // TH等级分类
-                            if (currentThLevels.isNotEmpty()) {
+                                // 服务器分类
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(CocCard)
-                                            .horizontalScroll(rememberScrollState())
-                                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    AnimatedVisibility(
+                                        visible = true,
+                                        enter = fadeIn(tween(350)) + slideInVertically(tween(350)) { -15 }
                                     ) {
-                                        CocChipSmall("全部", uiState.selectedThLevel == null) { onSelectThLevel(null) }
-                                        currentThLevels.forEach { level ->
-                                            CocChipSmall("TH$level", uiState.selectedThLevel == level) { onSelectThLevel(level) }
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(CocCard)
+                                                .horizontalScroll(rememberScrollState())
+                                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            AnimatedChip("全部", uiState.selectedServer == null) { onSelectServer(null) }
+                                            if (uiState.cnThLevels.isNotEmpty()) {
+                                                AnimatedChip("国服", uiState.selectedServer == "cn") { onSelectServer("cn") }
+                                            }
+                                            if (uiState.enThLevels.isNotEmpty()) {
+                                                AnimatedChip("国际服", uiState.selectedServer == "en") { onSelectServer("en") }
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            // 数量统计
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Text(
-                                    text = "共 ${filteredLayouts.size} 个阵型",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = CocTextSecondary
-                                )
-                            }
+                                // TH等级分类
+                                if (currentThLevels.isNotEmpty()) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        AnimatedVisibility(
+                                            visible = true,
+                                            enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { -15 }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(CocCard)
+                                                    .horizontalScroll(rememberScrollState())
+                                                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                AnimatedChipSmall("全部", uiState.selectedThLevel == null) { onSelectThLevel(null) }
+                                                currentThLevels.forEach { level ->
+                                                    AnimatedChipSmall("TH$level", uiState.selectedThLevel == level) { onSelectThLevel(level) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
 
-                            // 阵型卡片
-                            items(filteredLayouts) { item ->
-                                LayoutCard(
-                                    item = item,
-                                    isFavorite = isFavorite(item.link),
-                                    onClick = { selectedItem = item },
-                                    onUse = { onLayoutClick(it) },
-                                    onToggleFavorite = { onToggleFavorite(item.link, item.imageUrl) },
-                                    onShare = { onShare(item.link) }
-                                )
+                                // 数量统计
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    // 数量变化时的动画
+                                    val count = filteredLayouts.size
+                                    val animatedCount by animateIntAsState(
+                                        targetValue = count,
+                                        animationSpec = tween(300),
+                                        label = "countAnim"
+                                    )
+                                    Text(
+                                        text = "共 ${animatedCount} 个阵型",
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = CocTextSecondary
+                                    )
+                                }
+
+                                // 阵型卡片 - 带入场动画
+                                items(
+                                    filteredLayouts,
+                                    key = { it.link }
+                                ) { item ->
+                                    // 每张卡片渐现 + 上滑入场
+                                    var visible by remember { mutableStateOf(false) }
+                                    LaunchedEffect(item.link) {
+                                        visible = true
+                                    }
+                                    AnimatedVisibility(
+                                        visible = visible,
+                                        enter = fadeIn(tween(350)) + slideInVertically(tween(350)) { 40 }
+                                    ) {
+                                        LayoutCard(
+                                            item = item,
+                                            isFavorite = isFavorite(item.link),
+                                            onClick = { selectedItem = item },
+                                            onUse = { onLayoutClick(it) },
+                                            onToggleFavorite = { onToggleFavorite(item.link, item.imageUrl) },
+                                            onShare = { onShare(item.link) }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -399,13 +520,29 @@ fun LayoutGridScreen(
     }
 }
 
+/**
+ * 带选中动画的标签
+ */
 @Composable
-fun CocChip(text: String, selected: Boolean, onClick: () -> Unit) {
+fun AnimatedChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) CocAccent else CocAccentLight.copy(alpha = 0.4f),
+        animationSpec = tween(250),
+        label = "chipBg"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "chipScale"
+    )
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = if (selected) CocAccent else CocAccentLight.copy(alpha = 0.4f),
-        modifier = Modifier.height(32.dp)
+        color = backgroundColor,
+        modifier = Modifier
+            .height(32.dp)
+            .scale(scale)
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 14.dp)) {
             Text(
@@ -418,13 +555,29 @@ fun CocChip(text: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/**
+ * 带选中动画的小标签
+ */
 @Composable
-fun CocChipSmall(text: String, selected: Boolean, onClick: () -> Unit) {
+fun AnimatedChipSmall(text: String, selected: Boolean, onClick: () -> Unit) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (selected) CocAccent else CocAccentLight,
+        animationSpec = tween(250),
+        label = "chipSmallBg"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.08f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "chipSmallScale"
+    )
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = if (selected) CocAccent else CocAccentLight,
-        modifier = Modifier.height(28.dp)
+        color = backgroundColor,
+        modifier = Modifier
+            .height(28.dp)
+            .scale(scale)
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 10.dp)) {
             Text(
@@ -470,7 +623,6 @@ fun SettingsDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = CocTextSecondary
                 )
-
             }
         },
         confirmButton = {
@@ -496,7 +648,6 @@ fun OpenLinkDialog(
     var link by remember { mutableStateOf("") }
     val hasLink = link.isNotBlank()
 
-    // Detect server from link
     val detectedServer = remember(link) {
         val l = link.lowercase()
         when {
@@ -534,7 +685,6 @@ fun OpenLinkDialog(
                     value = link,
                     onValueChange = { newValue ->
                         val prefix = "https://link.clashofclans.com/"
-                        // Allow: empty, valid link, or partial typing of the prefix
                         if (newValue.isEmpty()
                             || newValue.startsWith(prefix)
                             || prefix.startsWith(newValue)
@@ -550,7 +700,11 @@ fun OpenLinkDialog(
                         cursorColor = darkGray
                     ),
                     trailingIcon = {
-                        if (link.isNotEmpty()) {
+                        AnimatedVisibility(
+                            visible = link.isNotEmpty(),
+                            enter = fadeIn() + scaleIn(),
+                            exit = fadeOut() + scaleOut()
+                        ) {
                             IconButton(onClick = { link = "" }, modifier = Modifier.size(20.dp)) {
                                 Icon(
                                     Icons.Default.Clear,
@@ -568,23 +722,43 @@ fun OpenLinkDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // 按钮带缩放动画
+                    val cnInteraction = remember { MutableInteractionSource() }
+                    val isCnPressed by cnInteraction.collectIsPressedAsState()
+                    val cnScale by animateFloatAsState(
+                        targetValue = if (isCnPressed) 0.93f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "cnBtnScale"
+                    )
+
                     Surface(
                         onClick = { if (hasLink) onOpen(link.trim(), "cn") },
-                        modifier = Modifier.weight(1f).height(44.dp),
+                        modifier = Modifier.weight(1f).height(44.dp).scale(cnScale),
                         shape = RoundedCornerShape(10.dp),
                         color = btnCn,
-                        enabled = hasLink
+                        enabled = hasLink,
+                        interactionSource = cnInteraction
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text("国服打开", color = textCn, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         }
                     }
+
+                    val enInteraction = remember { MutableInteractionSource() }
+                    val isEnPressed by enInteraction.collectIsPressedAsState()
+                    val enScale by animateFloatAsState(
+                        targetValue = if (isEnPressed) 0.93f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "enBtnScale"
+                    )
+
                     Surface(
                         onClick = { if (hasLink) onOpen(link.trim(), "en") },
-                        modifier = Modifier.weight(1f).height(44.dp),
+                        modifier = Modifier.weight(1f).height(44.dp).scale(enScale),
                         shape = RoundedCornerShape(10.dp),
                         color = btnEn,
-                        enabled = hasLink
+                        enabled = hasLink,
+                        interactionSource = enInteraction
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text("国际服打开", color = textEn, fontWeight = FontWeight.Medium, fontSize = 14.sp)
@@ -593,104 +767,109 @@ fun OpenLinkDialog(
                 }
 
                 // History
-                if (history.isNotEmpty()) {
-                    Text(
-                        "历史记录",
-                        fontSize = 12.sp,
-                        color = Color(0xFF9E9E9E),
-                        fontWeight = FontWeight.Medium
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 200.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        history.take(20).forEach { (hLink, hTime, hServer) ->
-                            val dateStr = remember(hTime) {
-                                val sdf = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
-                                sdf.format(java.util.Date(hTime))
-                            }
-                            // Parse server:thLevel
-                            val svrParts = hServer.split(":")
-                            val svr = svrParts.getOrElse(0) { "" }
-                            val thLvl = svrParts.getOrElse(1) { "0" }.toIntOrNull() ?: 0
-                            val (tagText, tagBg, tagFg) = when (svr) {
-                                "cn" -> Triple(
-                                    if (thLvl > 0) "国服${thLvl}本" else "国服",
-                                    Color(0xFFE8F5E9), Color(0xFF388E3C)
-                                )
-                                "en" -> Triple(
-                                    if (thLvl > 0) "国际${thLvl}本" else "国际",
-                                    Color(0xFFE3F2FD), Color(0xFF1976D2)
-                                )
-                                else -> Triple("", Color.Transparent, Color.Transparent)
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth().height(40.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(
-                                    onClick = { onRemoveHistory(hLink) },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Clear,
-                                        contentDescription = "删除",
-                                        tint = Color(0xFFBDBDBD),
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                AnimatedVisibility(
+                    visible = history.isNotEmpty(),
+                    enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+                    exit = fadeOut(tween(200)) + shrinkVertically(tween(200))
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            "历史记录",
+                            fontSize = 12.sp,
+                            color = Color(0xFF9E9E9E),
+                            fontWeight = FontWeight.Medium
+                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            history.take(20).forEach { (hLink, hTime, hServer) ->
+                                val dateStr = remember(hTime) {
+                                    val sdf = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+                                    sdf.format(java.util.Date(hTime))
                                 }
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Surface(
-                                    onClick = { link = hLink },
-                                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Color(0xFFF5F5F5)
+                                val svrParts = hServer.split(":")
+                                val svr = svrParts.getOrElse(0) { "" }
+                                val thLvl = svrParts.getOrElse(1) { "0" }.toIntOrNull() ?: 0
+                                val (tagText, tagBg, tagFg) = when (svr) {
+                                    "cn" -> Triple(
+                                        if (thLvl > 0) "国服${thLvl}本" else "国服",
+                                        Color(0xFFE8F5E9), Color(0xFF388E3C)
+                                    )
+                                    "en" -> Triple(
+                                        if (thLvl > 0) "国际${thLvl}本" else "国际",
+                                        Color(0xFFE3F2FD), Color(0xFF1976D2)
+                                    )
+                                    else -> Triple("", Color.Transparent, Color.Transparent)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    IconButton(
+                                        onClick = { onRemoveHistory(hLink) },
+                                        modifier = Modifier.size(20.dp)
                                     ) {
                                         Icon(
-                                            Icons.Default.Schedule,
-                                            contentDescription = null,
+                                            Icons.Default.Clear,
+                                            contentDescription = "删除",
                                             tint = Color(0xFFBDBDBD),
-                                            modifier = Modifier.size(13.dp)
+                                            modifier = Modifier.size(14.dp)
                                         )
-                                        Spacer(modifier = Modifier.width(5.dp))
-                                        if (tagText.isNotEmpty()) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(tagBg, RoundedCornerShape(4.dp))
-                                                    .padding(horizontal = 6.dp, vertical = 3.dp)
-                                            ) {
-                                                Text(
-                                                    tagText,
-                                                    fontSize = 10.sp,
-                                                    color = tagFg,
-                                                    fontWeight = FontWeight.Medium,
-                                                    maxLines = 1
-                                                )
-                                            }
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Surface(
+                                        onClick = { link = hLink },
+                                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFFF5F5F5)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Schedule,
+                                                contentDescription = null,
+                                                tint = Color(0xFFBDBDBD),
+                                                modifier = Modifier.size(13.dp)
+                                            )
                                             Spacer(modifier = Modifier.width(5.dp))
+                                            if (tagText.isNotEmpty()) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(tagBg, RoundedCornerShape(4.dp))
+                                                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                                                ) {
+                                                    Text(
+                                                        tagText,
+                                                        fontSize = 10.sp,
+                                                        color = tagFg,
+                                                        fontWeight = FontWeight.Medium,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(5.dp))
+                                            }
+                                            Text(
+                                                hLink,
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF757575),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                dateStr,
+                                                fontSize = 10.sp,
+                                                color = Color(0xFFBDBDBD),
+                                                maxLines = 1
+                                            )
                                         }
-                                        Text(
-                                            hLink,
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF757575),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            dateStr,
-                                            fontSize = 10.sp,
-                                            color = Color(0xFFBDBDBD),
-                                            maxLines = 1
-                                        )
                                     }
                                 }
                             }
@@ -720,16 +899,31 @@ fun LayoutPreviewDialog(
     var scale by remember { mutableStateOf(1f) }
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
+    var imageLoaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(item) {
-        scale = 1f; offsetX = 0f; offsetY = 0f
+        scale = 1f; offsetX = 0f; offsetY = 0f; imageLoaded = false
     }
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color.White) {
+        // 整体渐入动画
+        var dialogVisible by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) { dialogVisible = true }
+        val dialogAlpha by animateFloatAsState(
+            targetValue = if (dialogVisible) 1f else 0f,
+            animationSpec = tween(250),
+            label = "dialogAlpha"
+        )
+
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = dialogAlpha },
+            color = Color.White
+        ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Spacer(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars))
                 Row(
@@ -746,11 +940,18 @@ fun LayoutPreviewDialog(
                     Spacer(modifier = Modifier.weight(1f))
                     Text("双指缩放单击返回", style = MaterialTheme.typography.titleMedium, color = CocTextSecondary)
                     Spacer(modifier = Modifier.weight(1f))
+                    // 收藏按钮带动画
+                    val favScale by animateFloatAsState(
+                        targetValue = if (isFavorite) 1.2f else 1f,
+                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+                        label = "previewFavScale"
+                    )
                     IconButton(onClick = onToggleFavorite) {
                         Icon(
                             if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "收藏",
-                            tint = if (isFavorite) CocFavorite else CocTextHint
+                            tint = if (isFavorite) CocFavorite else CocTextHint,
+                            modifier = Modifier.scale(favScale)
                         )
                     }
                     IconButton(onClick = onShare) {
@@ -796,7 +997,8 @@ fun LayoutPreviewDialog(
                                     scaleX = scale, scaleY = scale,
                                     translationX = offsetX, translationY = offsetY
                                 ),
-                            contentScale = ContentScale.Fit
+                            contentScale = ContentScale.Fit,
+                            onSuccess = { imageLoaded = true }
                         )
                     } else {
                         Text("暂无图片", color = CocTextHint)
@@ -817,11 +1019,36 @@ fun LayoutCard(
     onShare: () -> Unit
 ) {
     val context = LocalContext.current
+
+    // 卡片按压效果
+    var isCardPressed by remember { mutableStateOf(false) }
+    val cardScale by animateFloatAsState(
+        targetValue = if (isCardPressed) 0.97f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
+        label = "cardScale"
+    )
+    val cardElevation by animateDpAsState(
+        targetValue = if (isCardPressed) 6.dp else 2.dp,
+        animationSpec = tween(150),
+        label = "cardElevation"
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(cardScale)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isCardPressed = true
+                        tryAwaitRelease()
+                        isCardPressed = false
+                    }
+                )
+            },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = CocCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
         Column {
             Box(
@@ -831,6 +1058,14 @@ fun LayoutCard(
                     .clickable(onClick = onClick)
             ) {
                 if (item.imageUrl.isNotEmpty()) {
+                    // 图片渐入加载
+                    var imageAlpha by remember { mutableStateOf(0f) }
+                    val animatedAlpha by animateFloatAsState(
+                        targetValue = imageAlpha,
+                        animationSpec = tween(400),
+                        label = "imageAlpha"
+                    )
+
                     AsyncImage(
                         model = ImageRequest.Builder(context)
                             .data(item.imageUrl)
@@ -843,8 +1078,10 @@ fun LayoutCard(
                         contentDescription = "阵型",
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)),
-                        contentScale = ContentScale.Crop
+                            .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                            .graphicsLayer { alpha = animatedAlpha },
+                        contentScale = ContentScale.Crop,
+                        onSuccess = { imageAlpha = 1f }
                     )
                     // 服务器标签
                     val serverLabel = buildString {
@@ -865,6 +1102,11 @@ fun LayoutCard(
                         )
                     }
                     // 收藏按钮
+                    val favScale by animateFloatAsState(
+                        targetValue = if (isFavorite) 1.2f else 1f,
+                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+                        label = "cardFavScale"
+                    )
                     IconButton(
                         onClick = onToggleFavorite,
                         modifier = Modifier
@@ -876,7 +1118,9 @@ fun LayoutCard(
                             if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "收藏",
                             tint = if (isFavorite) CocFavorite else Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier
+                                .size(20.dp)
+                                .scale(favScale)
                         )
                     }
                     // 放大镜标签
@@ -912,13 +1156,24 @@ fun LayoutCard(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                // 使用按钮 - 带缩放
+                val useInteraction = remember { MutableInteractionSource() }
+                val isUsePressed by useInteraction.collectIsPressedAsState()
+                val useScale by animateFloatAsState(
+                    targetValue = if (isUsePressed) 0.92f else 1f,
+                    animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                    label = "useScale"
+                )
+
                 Surface(
                     onClick = { onUse(item) },
                     modifier = Modifier
                         .weight(1f)
-                        .height(34.dp),
+                        .height(34.dp)
+                        .scale(useScale),
                     shape = RoundedCornerShape(6.dp),
-                    color = CocAccent
+                    color = CocAccent,
+                    interactionSource = useInteraction
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
@@ -929,11 +1184,23 @@ fun LayoutCard(
                         )
                     }
                 }
+
+                val shareInteraction = remember { MutableInteractionSource() }
+                val isSharePressed by shareInteraction.collectIsPressedAsState()
+                val shareScale by animateFloatAsState(
+                    targetValue = if (isSharePressed) 0.88f else 1f,
+                    animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                    label = "shareScale"
+                )
+
                 Surface(
                     onClick = onShare,
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier
+                        .size(34.dp)
+                        .scale(shareScale),
                     shape = RoundedCornerShape(6.dp),
-                    color = CocAccentLight
+                    color = CocAccentLight,
+                    interactionSource = shareInteraction
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(

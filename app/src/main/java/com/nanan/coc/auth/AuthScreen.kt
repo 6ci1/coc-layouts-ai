@@ -1,5 +1,6 @@
 package com.nanan.coc.auth
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,7 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -17,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import android.widget.Toast
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.platform.LocalContext
 import com.nanan.coc.R
 
@@ -64,7 +69,42 @@ fun AuthScreen(
         )
     }
 
+    // 入场动画：Logo 缩放 + 表单渐入
+    var animationPlayed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { animationPlayed = true }
 
+    val logoScale by animateFloatAsState(
+        targetValue = if (animationPlayed) 1f else 0.3f,
+        animationSpec = spring(
+            dampingRatio = 0.5f,
+            stiffness = 200f
+        ),
+        label = "logoScale"
+    )
+
+    val logoAlpha by animateFloatAsState(
+        targetValue = if (animationPlayed) 1f else 0f,
+        animationSpec = tween(500),
+        label = "logoAlpha"
+    )
+
+    val formAlpha by animateFloatAsState(
+        targetValue = if (animationPlayed) 1f else 0f,
+        animationSpec = tween(600, delayMillis = 200),
+        label = "formAlpha"
+    )
+
+    val formOffsetY by animateFloatAsState(
+        targetValue = if (animationPlayed) 0f else 30f,
+        animationSpec = tween(600, delayMillis = 200, easing = FastOutSlowInEasing),
+        label = "formOffsetY"
+    )
+
+    val footerAlpha by animateFloatAsState(
+        targetValue = if (animationPlayed) 1f else 0f,
+        animationSpec = tween(500, delayMillis = 400),
+        label = "footerAlpha"
+    )
 
     Scaffold(
         containerColor = Color.White,
@@ -81,11 +121,14 @@ fun AuthScreen(
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
-            // App 图标
+            // App 图标 - 弹性缩放入场
             Image(
                 painter = painterResource(id = R.mipmap.ic_launcher),
                 contentDescription = "图标",
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier
+                    .size(80.dp)
+                    .scale(logoScale)
+                    .graphicsLayer { alpha = logoAlpha }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -95,7 +138,11 @@ fun AuthScreen(
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF404040),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.graphicsLayer {
+                    alpha = logoAlpha
+                    translationY = formOffsetY * 0.3f
+                }
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -104,14 +151,20 @@ fun AuthScreen(
                 text = "输入卡密以激活应用",
                 fontSize = 14.sp,
                 color = Color(0xFFA0A0A0),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.graphicsLayer { alpha = logoAlpha }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 输入卡
+            // 输入卡 - 滑入入场
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        alpha = formAlpha
+                        translationY = formOffsetY
+                    },
                 shape = RoundedCornerShape(14.dp),
                 color = Color(0xFFFAFAFA),
                 tonalElevation = 1.dp
@@ -139,19 +192,44 @@ fun AuthScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
+                    // 激活按钮 - 带按压缩放
+                    val btnInteraction = remember { MutableInteractionSource() }
+                    val isBtnPressed by btnInteraction.collectIsPressedAsState()
+                    val btnScale by animateFloatAsState(
+                        targetValue = if (isBtnPressed) 0.95f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "loginBtnScale"
+                    )
+
                     Button(
                         onClick = { viewModel.login(kami) },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .scale(btnScale),
                         enabled = state != AuthViewModel.AuthState.LoggingIn,
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF505050),
                             disabledContainerColor = Color(0xFFC0C0C0)
-                        )
+                        ),
+                        interactionSource = btnInteraction
                     ) {
                         if (state == AuthViewModel.AuthState.LoggingIn) {
+                            // 加载中 - 旋转动画
+                            val rotation by rememberInfiniteTransition(label = "loadingRot").animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1000, easing = LinearEasing),
+                                    repeatMode = RepeatMode.Restart
+                                ),
+                                label = "loadingRotation"
+                            )
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer { rotationZ = rotation },
                                 color = Color.White,
                                 strokeWidth = 2.dp
                             )
@@ -166,10 +244,11 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // 无卡密模式
+            // 无卡密模式 - 延迟渐入
             TextButton(
                 onClick = { viewModel.enterGuest() },
-                enabled = state != AuthViewModel.AuthState.LoggingIn
+                enabled = state != AuthViewModel.AuthState.LoggingIn,
+                modifier = Modifier.graphicsLayer { alpha = footerAlpha }
             ) {
                 Text(
                     "无卡密模式",
@@ -182,7 +261,8 @@ fun AuthScreen(
 
             TextButton(
                 onClick = { viewModel.unbind(kami) },
-                enabled = state != AuthViewModel.AuthState.LoggingIn
+                enabled = state != AuthViewModel.AuthState.LoggingIn,
+                modifier = Modifier.graphicsLayer { alpha = footerAlpha }
             ) {
                 Text(
                     "解绑设备",
@@ -192,7 +272,6 @@ fun AuthScreen(
                 )
             }
 
-            // 底部留白
             Spacer(modifier = Modifier.weight(1f))
         }
     }
