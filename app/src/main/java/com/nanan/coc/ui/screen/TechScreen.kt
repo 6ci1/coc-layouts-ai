@@ -1,9 +1,15 @@
 package com.nanan.coc.ui.screen
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -12,7 +18,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,6 +39,50 @@ private val CocGreen = Color(0xFF4CAF50)
 private val CocOrange = Color(0xFFFF9800)
 private val CocRed = Color(0xFFEF5350)
 
+/**
+ * Shimmer 骨架屏 - 科技查询页
+ */
+@Composable
+private fun TechShimmer() {
+    val transition = rememberInfiniteTransition(label = "techShimmer")
+    val translateAnim by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerTranslate"
+    )
+    val brush = androidx.compose.ui.graphics.Brush.linearGradient(
+        colors = listOf(Color(0xFFE0E0E0), Color(0xFFF5F5F5), Color(0xFFE0E0E0)),
+        start = Offset(translateAnim - 200f, translateAnim - 200f),
+        end = Offset(translateAnim, translateAnim)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // 玩家信息骨架
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .background(brush, RoundedCornerShape(10.dp))
+        )
+        // 卡片骨架
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .background(brush, RoundedCornerShape(12.dp))
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TechScreen(
@@ -42,7 +95,12 @@ fun TechScreen(
     var tagInput by remember(uiState.playerTag) { mutableStateOf(uiState.playerTag) }
     var keyInput by remember(uiState.apiKey) { mutableStateOf(uiState.apiKey) }
 
-    if (uiState.showSettings) {
+    // 设置弹窗动画
+    AnimatedVisibility(
+        visible = uiState.showSettings,
+        enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.9f),
+        exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.9f)
+    ) {
         AlertDialog(
             onDismissRequest = onDismissSettings,
             title = { Text("API 设置", fontWeight = FontWeight.Medium) },
@@ -91,12 +149,35 @@ fun TechScreen(
                     Text("科技查询", fontWeight = FontWeight.Bold, color = CocTextPrimary)
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    // 返回按钮缩放
+                    val backInteraction = remember { MutableInteractionSource() }
+                    val isBackPressed by backInteraction.collectIsPressedAsState()
+                    val backScale by animateFloatAsState(
+                        targetValue = if (isBackPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "backScale"
+                    )
+                    IconButton(
+                        onClick = onBack,
+                        interactionSource = backInteraction,
+                        modifier = Modifier.scale(backScale)
+                    ) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = CocTextPrimary)
                     }
                 },
                 actions = {
-                    IconButton(onClick = onToggleSettings) {
+                    val settingsInteraction = remember { MutableInteractionSource() }
+                    val isSettingsPressed by settingsInteraction.collectIsPressedAsState()
+                    val settingsScale by animateFloatAsState(
+                        targetValue = if (isSettingsPressed) 0.85f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                        label = "settingsScale"
+                    )
+                    IconButton(
+                        onClick = onToggleSettings,
+                        interactionSource = settingsInteraction,
+                        modifier = Modifier.scale(settingsScale)
+                    ) {
                         Icon(Icons.Default.Settings, contentDescription = "设置", tint = CocTextSecondary)
                     }
                 },
@@ -120,93 +201,109 @@ fun TechScreen(
                 tag = tagInput,
                 apiKey = keyInput,
                 onTagChange = { tagInput = it },
-                onSearch = { onLoadPlayer(tagInput, keyInput) }
+                onSearch = { onLoadPlayer(tagInput, keyInput) },
+                isLoading = uiState.isLoading
             )
 
-            when {
-                uiState.isLoading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = CocAccent)
+            // 内容区域 crossfade 切换
+            Crossfade(
+                targetState = when {
+                    uiState.isLoading -> "loading"
+                    uiState.error != null && uiState.playerInfo == null -> "error"
+                    uiState.playerInfo != null -> "content"
+                    else -> "empty"
+                },
+                animationSpec = tween(400),
+                label = "techCrossfade"
+            ) { state ->
+                when (state) {
+                    "loading" -> {
+                        TechShimmer()
                     }
-                }
-                uiState.error != null && uiState.playerInfo == null -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(uiState.error!!, color = CocTextPrimary, fontSize = 14.sp)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(
-                                onClick = { onLoadPlayer(tagInput, keyInput) },
-                                colors = ButtonDefaults.buttonColors(containerColor = CocAccent)
-                            ) { Text("重试") }
+                    "error" -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(uiState.error ?: "", color = CocTextPrimary, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { onLoadPlayer(tagInput, keyInput) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = CocAccent)
+                                ) { Text("重试") }
+                            }
                         }
                     }
-                }
-                uiState.playerInfo != null -> {
-                    val allItems = uiState.techItems
-                    val heroes = allItems.filter { it.category == "hero" }
-                    val troops = allItems.filter { it.category == "troop" }
-                    val spells = allItems.filter { it.category == "spell" }
+                    "content" -> {
+                        val allItems = uiState.techItems
+                        val heroes = allItems.filter { it.category == "hero" }
+                        val troops = allItems.filter { it.category == "troop" }
+                        val spells = allItems.filter { it.category == "spell" }
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // 玩家信息头（精简）
-                        PlayerHeaderCompact(uiState)
-
-                        // 整体查询结果卡片
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFAFA)),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            // 玩家信息头 - 渐现入场
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { -20 }
                             ) {
-                                // 英雄等级
-                                if (heroes.isNotEmpty()) {
-                                    HeroSection(heroes)
-                                }
+                                PlayerHeaderCompact(uiState)
+                            }
 
-                                // 兵种等级
-                                if (troops.isNotEmpty()) {
-                                    TroopSection(troops)
-                                }
-
-                                // 法术等级
-                                if (spells.isNotEmpty()) {
-                                    SpellSection(spells)
+                            // 查询结果卡片 - 渐现入场
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(tween(400, delayMillis = 100)) + slideInVertically(tween(400, delayMillis = 100)) { 30 }
+                            ) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFAFA)),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        if (heroes.isNotEmpty()) {
+                                            HeroSection(heroes)
+                                        }
+                                        if (troops.isNotEmpty()) {
+                                            TroopSection(troops)
+                                        }
+                                        if (spells.isNotEmpty()) {
+                                            SpellSection(spells)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                else -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = null,
-                                tint = CocAccentLight,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                "输入玩家标签和 API Key 查询科技发展",
-                                color = CocTextSecondary,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                "点击右上角 ⚙️ 设置",
-                                color = CocAccentLight,
-                                fontSize = 12.sp
-                            )
+                    "empty" -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = CocAccentLight,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    "输入玩家标签和 API Key 查询科技发展",
+                                    color = CocTextSecondary,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "点击右上角 ⚙️ 设置",
+                                    color = CocAccentLight,
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -220,7 +317,8 @@ private fun QuickInputBar(
     tag: String,
     apiKey: String,
     onTagChange: (String) -> Unit,
-    onSearch: () -> Unit
+    onSearch: () -> Unit,
+    isLoading: Boolean = false
 ) {
     Surface(
         color = CocBg,
@@ -248,19 +346,49 @@ private fun QuickInputBar(
                 modifier = Modifier.weight(1f).height(48.dp),
                 textStyle = MaterialTheme.typography.bodyMedium
             )
+
+            // 搜索按钮 - 带按压缩放 + 加载旋转
+            val searchInteraction = remember { MutableInteractionSource() }
+            val isSearchPressed by searchInteraction.collectIsPressedAsState()
+            val searchScale by animateFloatAsState(
+                targetValue = if (isSearchPressed) 0.9f else 1f,
+                animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+                label = "searchScale"
+            )
+
             Surface(
                 onClick = onSearch,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(48.dp).scale(searchScale),
                 shape = RoundedCornerShape(10.dp),
-                color = CocAccent
+                color = CocAccent,
+                interactionSource = searchInteraction
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.Search,
-                        contentDescription = "查询",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    if (isLoading) {
+                        val rotation by rememberInfiniteTransition(label = "searchRot").animateFloat(
+                            initialValue = 0f,
+                            targetValue = 360f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(1000, easing = LinearEasing),
+                                repeatMode = RepeatMode.Restart
+                            ),
+                            label = "searchRotation"
+                        )
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer { rotationZ = rotation },
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "查询",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
@@ -280,10 +408,21 @@ private fun PlayerHeaderCompact(uiState: TechUiState) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // TH 徽章 - 弹入动画
+            var badgeVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { badgeVisible = true }
+            val badgeScale by animateFloatAsState(
+                targetValue = if (badgeVisible) 1f else 0.3f,
+                animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+                label = "badgeScale"
+            )
+
             Surface(
                 shape = RoundedCornerShape(6.dp),
                 color = CocAccent,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier
+                    .size(36.dp)
+                    .scale(badgeScale)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
@@ -324,29 +463,57 @@ private fun PlayerHeaderCompact(uiState: TechUiState) {
 
 @Composable
 private fun HeroSection(heroes: List<TechItem>) {
-    SectionHeader(icon = "👑", title = "英雄等级")
+    // 区域标题渐现
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(300)) { -10 }
+    ) {
+        SectionHeader(icon = "👑", title = "英雄等级")
+    }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        heroes.forEach { hero ->
-            HeroChip(hero, modifier = Modifier.weight(1f))
+        heroes.forEachIndexed { index, hero ->
+            // 逐个延迟入场
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(50L * index)
+                visible = true
+            }
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(250)) + scaleIn(tween(250), initialScale = 0.8f),
+                modifier = Modifier.weight(1f)
+            ) {
+                HeroChip(hero)
+            }
         }
     }
 }
 
 @Composable
 private fun HeroChip(item: TechItem, modifier: Modifier = Modifier) {
-    val color = when {
+    val targetColor = when {
         item.isMaxed -> CocGreen
         item.remainingLevels <= 2 -> CocOrange
         else -> CocRed
     }
+    val bgColor by animateColorAsState(
+        targetValue = targetColor.copy(alpha = 0.1f),
+        animationSpec = tween(300),
+        label = "heroBgColor"
+    )
+    val textColor by animateColorAsState(
+        targetValue = targetColor,
+        animationSpec = tween(300),
+        label = "heroTextColor"
+    )
 
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = color.copy(alpha = 0.1f),
+        color = bgColor,
         modifier = modifier
     ) {
         Column(
@@ -366,7 +533,7 @@ private fun HeroChip(item: TechItem, modifier: Modifier = Modifier) {
                 "Lv.${item.currentLevel}/${item.boostMaxLevel}",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = textColor
             )
         }
     }
@@ -380,12 +547,15 @@ private fun TroopSection(troops: List<TechItem>) {
     val notMaxedCount = troops.size - maxedCount
     val totalRemainingTime = troops.filter { !it.isMaxed }.sumOf { it.totalUpgradeTime }
 
-    SectionHeader(icon = "⚔️", title = "兵种等级")
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(tween(300, delayMillis = 50)) + slideInVertically(tween(300, delayMillis = 50)) { -10 }
+    ) {
+        SectionHeader(icon = "⚔️", title = "兵种等级")
+    }
 
-    // 等级网格
     FlowGrid(items = troops, columns = 4)
 
-    // 统计行
     Spacer(modifier = Modifier.height(4.dp))
     StatRow(maxedCount, notMaxedCount, totalRemainingTime, troops.size)
 }
@@ -398,12 +568,15 @@ private fun SpellSection(spells: List<TechItem>) {
     val notMaxedCount = spells.size - maxedCount
     val totalRemainingTime = spells.filter { !it.isMaxed }.sumOf { it.totalUpgradeTime }
 
-    SectionHeader(icon = "✨", title = "法术等级")
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(tween(300, delayMillis = 100)) + slideInVertically(tween(300, delayMillis = 100)) { -10 }
+    ) {
+        SectionHeader(icon = "✨", title = "法术等级")
+    }
 
-    // 等级网格
     FlowGrid(items = spells, columns = 4)
 
-    // 统计行
     Spacer(modifier = Modifier.height(4.dp))
     StatRow(maxedCount, notMaxedCount, totalRemainingTime, spells.size)
 }
@@ -428,17 +601,27 @@ private fun SectionHeader(icon: String, title: String) {
 private fun FlowGrid(items: List<TechItem>, columns: Int) {
     val rows = items.chunked(columns)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        rows.forEach { rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+        rows.forEachIndexed { rowIndex, rowItems ->
+            // 每行延迟入场
+            var visible by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(30L * rowIndex)
+                visible = true
+            }
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(tween(200)) + slideInHorizontally(tween(200)) { -20 }
             ) {
-                rowItems.forEach { item ->
-                    LevelChip(item, modifier = Modifier.weight(1f))
-                }
-                // 填充空位
-                repeat(columns - rowItems.size) {
-                    Spacer(modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    rowItems.forEach { item ->
+                        LevelChip(item, modifier = Modifier.weight(1f))
+                    }
+                    repeat(columns - rowItems.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -447,16 +630,37 @@ private fun FlowGrid(items: List<TechItem>, columns: Int) {
 
 @Composable
 private fun LevelChip(item: TechItem, modifier: Modifier = Modifier) {
-    val color = when {
+    val targetColor = when {
         item.isMaxed -> CocGreen
         item.remainingLevels <= 2 -> CocOrange
         else -> CocRed
     }
+    val bgColor by animateColorAsState(
+        targetValue = targetColor.copy(alpha = 0.1f),
+        animationSpec = tween(300),
+        label = "chipBgColor"
+    )
+    val textColor by animateColorAsState(
+        targetValue = targetColor,
+        animationSpec = tween(300),
+        label = "chipTextColor"
+    )
+
+    // 按压缩放
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val chipScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "chipScale"
+    )
 
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.1f),
-        modifier = modifier
+        color = bgColor,
+        modifier = modifier.scale(chipScale),
+        interactionSource = interactionSource,
+        onClick = {}
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
@@ -473,7 +677,7 @@ private fun LevelChip(item: TechItem, modifier: Modifier = Modifier) {
                 "Lv.${item.currentLevel}/${item.boostMaxLevel}",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = textColor
             )
         }
     }
@@ -483,36 +687,71 @@ private fun LevelChip(item: TechItem, modifier: Modifier = Modifier) {
 private fun StatRow(maxedCount: Int, notMaxedCount: Int, totalRemainingTime: Long, total: Int) {
     val percent = if (total > 0) (maxedCount * 100 / total) else 0
 
+    // 数字动画
+    val animatedMaxed by animateIntAsState(
+        targetValue = maxedCount,
+        animationSpec = tween(500),
+        label = "animatedMaxed"
+    )
+    val animatedNotMaxed by animateIntAsState(
+        targetValue = notMaxedCount,
+        animationSpec = tween(500),
+        label = "animatedNotMaxed"
+    )
+    val animatedPercent by animateIntAsState(
+        targetValue = percent,
+        animationSpec = tween(600),
+        label = "animatedPercent"
+    )
+
+    // 进度条动画
+    val animatedProgress by animateFloatAsState(
+        targetValue = if (total > 0) maxedCount.toFloat() / total else 0f,
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "progressAnim"
+    )
+
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = Color(0xFFF0F0F0),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                "✅ $maxedCount 已满  ❌ $notMaxedCount 未满  ($percent%)",
-                fontSize = 11.sp,
-                color = CocTextPrimary
-            )
-            if (totalRemainingTime > 0) {
+        Column {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text(
-                    "⏱ ${PlayerRepository.formatTime(totalRemainingTime)}",
+                    "✅ $animatedMaxed 已满  ❌ $animatedNotMaxed 未满  ($animatedPercent%)",
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = CocOrange
+                    color = CocTextPrimary
                 )
-            } else {
-                Text(
-                    "全部满级",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = CocGreen
-                )
+                if (totalRemainingTime > 0) {
+                    Text(
+                        "⏱ ${PlayerRepository.formatTime(totalRemainingTime)}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = CocOrange
+                    )
+                } else {
+                    Text(
+                        "全部满级",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = CocGreen
+                    )
+                }
             }
+            // 进度条
+            LinearProgressIndicator(
+                progress = { animatedProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp),
+                color = CocGreen,
+                trackColor = CocRed.copy(alpha = 0.3f),
+            )
         }
     }
 }
